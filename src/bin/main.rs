@@ -1,9 +1,9 @@
+use servidor_rust::ThreadPool;
 use std::fs;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
-use servidor_rust::ThreadPool;
 extern crate servidor_rust;
 
 fn main() {
