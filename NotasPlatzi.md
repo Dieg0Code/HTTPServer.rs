@@ -2,6 +2,8 @@
 
 ## Conexión TCP
 
+##### fuente original [aquí](https://doc.rust-lang.org/book/ch20-00-final-project-a-web-server.html)
+
 Tal vez has escuchado acerca de los protocolos TCP/HTTP, Hypertext Transfer Protocol (HTTP) y el Transmission Control Protocol (TCP). Ambos son protocolos de solicitud-respuesta, lo que significa que un cliente inicia solicitudes y un servidor escucha las solicitudes y proporciona una respuesta.
 
 TCP es un protocolo de bajo nivel, que se encarga de hacer la conexión que describe los detalles de comunicación entre un servidor y otro. HTTP trabaja dentro de TCP y es el principal encargado de las solicitudes y las respuestas.
@@ -467,3 +469,86 @@ pub fn spawn<F, T>(f: F) -> JoinHandle<T>
     F: FnOnce() -> T + Send + 'static,
     T: Send + 'static
 ```
+
+Cambiamos la definición de ThreadPoolmantener un vector de `thread::JoinHandle<()>instancias`, una vez que se recibe un tamaño válido, nuestro ThreadPool crea un nuevo vector que puede contener `size` cierto tamaño de elementos. Para otros fines donde no conoces el tamaño, puedes usar `with_capacity` que preasignar el tamaño dentro del vector.
+
+```Rust
+pub struct ThreadPool {
+   threads: Vec<thread::JoinHandle<()>>,
+}
+impl ThreadPool {
+pub fn new(size: usize) -> ThreadPool {
+    assert!(size > 0);
+
+    let mut threads = Vec::with_capacity(size);
+
+    for _ in 0..size {
+    }
+    ThreadPool { threads }
+   }
+```
+
+Cambiaremos el nombre del campo ThreadPool de threads a workers porque ahora contendrá instancias Worker en lugar de instancias JoinHandle<()>. Como no es necesario que `main` sepa cómo funcionan los worker, en este caso serán privadas. Necesitamos que se comuniquen entre hilos, es por eso que aplicaremos `channel` en este ejemplo.
+
+El ThreadPool creará un canal y se mantendrá en el lado emisor, cada Worker se aferrara al lado receptor, crearemos una nueva estructura llamada `Job` que contendrá los cierres que queremos enviar por el canal.
+
+El método `execute` enviará el trabajo que desea ejecutar en el lado de envío del canal. En su hilo, el bucle Worker pasará por su lado receptor del canal y ejecutará los cierres de cualquier trabajo que reciba.
+
+Pero aquí tendremos un problema, la implementación del canal que proporciona Rust es de múltiples productores, un solo consumidor. Esto significa que no podemos simplemente clonar el extremo consumidor del canal para arreglar este código.
+
+Para solucionar la parte de compartir la propiedad entre múltiples subprocesos y permitir que los subprocesos muten el valor, debemos usar Arc\<Mutex\<T>>. El Arc permitirá que varios worker posean el receptor y Mutex garantizará que solo un worker obtenga un trabajo del receptor a la vez.
+
+Finalmente implementamos el método `execute`. También cambiaremos `Job` de una estructura a un alias de tipo para un objeto `trait` que contenga el tipo de cierre que `execute` recibe.
+
+Después de crear una nueva instancia `Job` con el cierre que ingresamos execute, enviamos ese trabajo al final del canal de envío. Estaremos haciendo un llamado `unwrap` en caso de que el envío fracase.
+
+Nuestra biblioteca de librerías en lib.rs debe lucir de esta manera:
+
+```Rust
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
+```
+
+Por otro lado, como solo estoy llamando a Threadpool en nuestro archivo main, pero esta es una librería que creamos, como tal aún no se encuentra dentro de la biblioteca de Rust, es por eso que debemos llamarlo de la siguiente manera:
+
+```Rust
+extern crate nombredetuproyecto;
+```
+
+## Uso de Drop
+
+Ahora que estamos un poco más familiarizados con el uso de `traits` hablemos de uno en particular que nos ayudará a poder limpiar nuestro servidor después de terminar de hacer cada petición.
+
+Por el momento tenemos un proyecto que cuando lo corremos nos da un servidor multiproceso, también obtenemos algunas advertencias sobre el workers, id y thread, que no estamos utilizando de una manera directa que nos recuerda que no estamos limpiando nada. Al momento que queremos apagarlo, usamos la técnica que nunca falla Ctrl + C en nuestra terminal, eso hace que apaguemos nuestro servidor, por consecuencia, termina todo los subprocesos que se encuentran activos.
+
+En este tipo de casos es cuando podríamos usar el `trait` `Drop`, o mejor conocido como Destructor, solo tiene un método: `drop`, que se llama automáticamente cuando un objeto sale del alcance. El uso principal del rasgo Drop es liberar los recursos que posee la instancia.
+
+Solo hay dos métodos que se pueden usar por `Drop`:
+
+```Rust
+fn drop(&mut self)
+```
+
+Este método es llamado principalmente cuando el valor está fuera del scope.
+
+Y por otro lado, tenemos el método `Panic`. que automáticamente destruye el proceso al momento de ser llamado.
+
+Dentro de nuestro proyecto, ¿por qué se podría implementar `Drop`? Ya que generalmente se trabaja con `structs`, dentro de nuestro proyecto tenemos un tamaño y contador de procesos, podemos hacer uso de Drop, para hacer que ese contador baje a cero, cuando esto suceda, pueda apagar y limpiar nuestro proceso. Esto haría que nuestro servidor se apague y se limpie de una manera elegante.
+
+## Uso de frameworks y crates
+
+En este curso lo que hicimos, aprendimos lo suficiente que tu deberías saber para poder crear tu propio servidor de manera manual, conociste cómo trabajan los hilos, hablamos de concurrencia que es un aspecto importante para la creación de estos y creamos nuestro servidor sencillo. Usamos el código general educativo que hay en Rust pero de una forma mejor explicada.
+
+La manera en que nosotros hicimos nuestro servidor puede ayudarte para crear sistemas desde muy bajo nivel, como tu propio sistema operativo, librerías, métodos. Por ahora, a estas alturas ya hay varios frameworks y dependencias que nos ayudan a crear nuestro servidor para un desarrollo web de una manera más sencilla.
+
+Por ejemplo tenemos a [Rocket](https://rocket.rs/), que es uno de los frameworks más completos y preferidos por los desarrolladores, su principal punto fuerte es que no te hace sacrificar la velocidad por un entorno productivo y viceversa, ayuda a escribir aplicaciones web rápidas, seguras y sin sacrificar la flexibilidad, la usabilidad o la seguridad de tipos.
+
+También tenemos a [Actix](https://actix.rs/), es muy adecuado para escribir servicios con lógica y componentes duros. También proporciona muchas funciones (logging, http/2, etc.) listas para usar.
+
+[Nickel](https://nickel-org.github.io/) es un framework para crear aplicaciones web renderizadas por el servidor. Su API está inspirada en el popular framework Express para JavaScript. Nickel facilita el mapeo de datos JSON directamente en su struct, y de forma predeterminada, Nickel detecta todos los errores con su valor predeterminado ErrorHandler e intenta tomar medidas razonables. Por lo tanto, no es necesario escribir su propio errorHandler personalizado.
+
+Por último, pero no menos importante, tenemos a [Yew](https://docs.rs/yew/0.2.0/yew/), inspirado por React , Yew es un framework para construir aplicaciones de cliente web multiproceso con WebAssembly comúnmente conocido como WASM.
+
+No nos olvidemos [crates.io](https://crates.io/). El cual es una lista enorme de dependencias que podemos usar dentro de nuestro proyecto. En el caso de usar dependencias, si podemos cambiar de `cargo run` a `cargo build` para correr nuestras aplicaciones.
