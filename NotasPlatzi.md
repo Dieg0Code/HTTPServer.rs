@@ -2,7 +2,7 @@
 
 ## Conexión TCP
 
-##### fuente original [aquí](https://doc.rust-lang.org/book/ch20-00-final-project-a-web-server.html)
+##### fuente original [aquí](https://doc.rust-lang.org/book/ch20-00-final-project-a-web-server.html) y [aquí](https://platzi.com/clases/servidores-rust/)
 
 Tal vez has escuchado acerca de los protocolos TCP/HTTP, Hypertext Transfer Protocol (HTTP) y el Transmission Control Protocol (TCP). Ambos son protocolos de solicitud-respuesta, lo que significa que un cliente inicia solicitudes y un servidor escucha las solicitudes y proporciona una respuesta.
 
