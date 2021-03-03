@@ -12,9 +12,10 @@ type Job = Box<dyn FnOnce() + Send + 'static>;
 
 enum Message {
     NewJob(Job),
-    Terminate,
+    Terminate,  //stop
 }
 
+// MultiThread implementation
 impl ThreadPool {
     /// Create a new ThreadPool.
     ///
@@ -49,6 +50,7 @@ impl ThreadPool {
     }
 }
 
+//Terminate the threads
 impl Drop for ThreadPool {
     fn drop(&mut self) {
         println!("Sending terminate message to all workers.");
@@ -69,6 +71,7 @@ impl Drop for ThreadPool {
     }
 }
 
+// Workers for Threads
 struct Worker {
     id: usize,
     thread: Option<thread::JoinHandle<()>>,

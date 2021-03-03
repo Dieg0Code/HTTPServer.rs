@@ -9,9 +9,11 @@ use servidor_rust::ThreadPool;
 extern crate servidor_rust;
 
 fn main() {
+    // Server address: 127.0.0.1:7373
     let listener = TcpListener::bind("127.0.0.1:7373").unwrap();
-    let pool = ThreadPool::new(4);
+    let pool = ThreadPool::new(4);  //ThreadPool number
 
+    // Stream listener
     for stream in listener.incoming().take(2) {
         let stream = stream.unwrap();
 
@@ -23,6 +25,7 @@ fn main() {
     println!("Shutting down.");
 }
 
+// Connections Handlers
 fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
